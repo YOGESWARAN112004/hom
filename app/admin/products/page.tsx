@@ -23,7 +23,6 @@ type Product = {
     description?: string;
     basePrice: string;
     stock: number;
-    stock: number;
     category?: string;
     subCategory?: string;
     brand?: string;
