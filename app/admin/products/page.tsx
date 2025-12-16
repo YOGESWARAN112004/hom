@@ -44,7 +44,6 @@ export default function AdminProductsPage() {
         description: "",
         basePrice: "0",
         stock: 0,
-        stock: 0,
         category: "",
         subCategory: "",
         brand: "",
