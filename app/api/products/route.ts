@@ -28,7 +28,16 @@ export async function GET(req: NextRequest) {
 
         const lowStock = searchParams.get("lowStock") === "true";
 
-        let products = await storage.getProducts(filters);
+        // Get current user for dynamic pricing
+        const cookieStore = await cookies();
+        const token = cookieStore.get("token")?.value;
+        let userId: string | undefined;
+        if (token) {
+            const payload = await verifyToken(token);
+            if (payload) userId = payload.userId;
+        }
+
+        let products = await storage.getProducts(filters, userId);
 
         if (lowStock) {
             products = products.filter((p: any) => p.stock <= 5);

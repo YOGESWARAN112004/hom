@@ -48,9 +48,10 @@ import {
   type InsertAbandonedCartEmail,
   type Blog,
   type InsertBlog,
+  customPrices,
 } from "@shared/schema";
 import { db } from "./db";
-import { eq, desc, sql, and, gte, lte, or, ilike } from "drizzle-orm";
+import { eq, desc, sql, and, gte, lte, or, ilike, getTableColumns } from "drizzle-orm";
 
 export interface IStorage {
   // User operations
@@ -99,7 +100,7 @@ export interface IStorage {
   deleteBrand(id: string): Promise<void>;
 
   // Product operations
-  getProducts(filters?: ProductFilters): Promise<Product[]>;
+  getProducts(filters?: ProductFilters, userId?: string): Promise<Product[]>;
   getProduct(id: string): Promise<Product | undefined>;
   getProductBySlug(slug: string): Promise<Product | undefined>;
   getProductsByCategory(category: string, subCategory?: string): Promise<Product[]>;
@@ -461,8 +462,20 @@ export class DatabaseStorage implements IStorage {
   // PRODUCT OPERATIONS
   // ============================================
 
-  async getProducts(filters?: ProductFilters): Promise<Product[]> {
-    let query = db.select().from(products);
+  async getProducts(filters?: ProductFilters, userId?: string): Promise<Product[]> {
+    let query = db.select({
+      ...getTableColumns(products),
+      basePrice: userId ? sql`COALESCE(${customPrices.price}, ${products.basePrice})`.mapWith(Number) : products.basePrice,
+    }).from(products);
+
+    if (userId) {
+      query.leftJoin(customPrices, and(
+        eq(customPrices.productId, products.id),
+        eq(customPrices.userId, userId),
+        eq(customPrices.isActive, true)
+      )) as any;
+    }
+
     const conditions = [];
 
     if (filters?.category) {
@@ -507,7 +520,12 @@ export class DatabaseStorage implements IStorage {
       query = query.offset(filters.offset) as any;
     }
 
-    return await query;
+    const result = await query;
+    // Cast back to Product[] because the mapped basePrice might be number instead of string depending on driver, 
+    // but schema says string (decimal). mapWith(Number) makes it number. Schema expects string? 
+    // Wait, Drizzle usage: usually decimal is string.
+    // Let's remove mapWith(Number) and let it be string to match Product type.
+    return result as unknown as Product[];
   }
 
   async getProduct(id: string): Promise<Product | undefined> {

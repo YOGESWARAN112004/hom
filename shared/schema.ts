@@ -630,3 +630,27 @@ export const wishlistItemsRelations = relations(wishlistItems, ({ one }) => ({
     references: [products.id],
   }),
 }));
+
+// ============================================
+// CUSTOM PRICING (A/B Testing / Individual Offers)
+// ============================================
+
+export const customPrices = pgTable("custom_prices", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  userId: varchar("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  productId: varchar("product_id").notNull().references(() => products.id, { onDelete: "cascade" }),
+  price: decimal("price", { precision: 10, scale: 2 }).notNull(),
+  isActive: boolean("is_active").notNull().default(true),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+export const customPricesRelations = relations(customPrices, ({ one }) => ({
+  user: one(users, {
+    fields: [customPrices.userId],
+    references: [users.id],
+  }),
+  product: one(products, {
+    fields: [customPrices.productId],
+    references: [products.id],
+  }),
+}));

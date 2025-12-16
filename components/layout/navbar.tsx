@@ -81,8 +81,7 @@ export default function Navbar() {
         { href: "/", label: "Home" },
         { href: "/shop", label: "Shop" },
         { href: "/about", label: "About" },
-        { href: "/contact", label: "Contact" },
-        { href: "/affiliates/apply", label: "Affiliate" },
+        { href: "/contact", label: "Contact Us" },
     ];
 
     return (
@@ -101,8 +100,7 @@ export default function Navbar() {
                             <Link href="/shop?category=men" className="text-lg font-medium">Men</Link>
                             <Link href="/shop?category=women" className="text-lg font-medium">Women</Link>
                             <Link href="/shop?category=accessories" className="text-lg font-medium">Accessories</Link>
-                            <Link href="/contact" className="text-lg font-medium">Contact</Link>
-                            <Link href="/affiliates/apply" className="text-lg font-medium">Affiliate</Link>
+                            <Link href="/affiliates/apply" className="text-lg font-medium">Affiliate Program</Link>
                         </nav>
                     </SheetContent>
                 </Sheet>
@@ -115,6 +113,11 @@ export default function Navbar() {
 
                 {/* Desktop Nav */}
                 <div className="hidden md:flex items-center gap-6">
+                    <Link href="/affiliates/apply">
+                        <Button variant="outline" className="border-primary text-primary hover:bg-primary hover:text-primary-foreground">
+                            Apply to be Affiliate
+                        </Button>
+                    </Link>
                     <NavigationMenu>
                         <NavigationMenuList>
                             <NavigationMenuItem>

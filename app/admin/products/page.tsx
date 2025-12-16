@@ -22,6 +22,7 @@ type Product = {
     name: string;
     description?: string;
     basePrice: string;
+    compareAtPrice?: string;
     stock: number;
     category?: string;
     subCategory?: string;
@@ -43,6 +44,7 @@ export default function AdminProductsPage() {
         name: "",
         description: "",
         basePrice: "0",
+        compareAtPrice: "0",
         stock: 0,
         category: "",
         subCategory: "",
@@ -149,6 +151,7 @@ export default function AdminProductsPage() {
         const payload = {
             ...formData,
             basePrice: formData.basePrice?.toString(),
+            compareAtPrice: formData.compareAtPrice?.toString(),
             stock: Number(formData.stock),
         };
 
@@ -160,7 +163,7 @@ export default function AdminProductsPage() {
     };
 
     const resetForm = () => {
-        setFormData({ name: "", description: "", basePrice: "0", stock: 0, category: "", subCategory: "", brand: "", imageUrl: "", isFeatured: false, isActive: true });
+        setFormData({ name: "", description: "", basePrice: "0", compareAtPrice: "0", stock: 0, category: "", subCategory: "", brand: "", imageUrl: "", isFeatured: false, isActive: true });
         setEditingProduct(null);
     };
 
@@ -190,9 +193,15 @@ export default function AdminProductsPage() {
                                 <Label>Description</Label>
                                 <Textarea value={formData.description} onChange={e => setFormData({ ...formData, description: e.target.value })} />
                             </div>
-                            <div>
-                                <Label>Price</Label>
-                                <Input type="number" min="0" step="0.01" value={formData.basePrice} onChange={e => setFormData({ ...formData, basePrice: e.target.value })} required />
+                            <div className="grid grid-cols-2 gap-2">
+                                <div>
+                                    <Label>Base Price</Label>
+                                    <Input type="number" min="0" step="0.01" value={formData.basePrice} onChange={e => setFormData({ ...formData, basePrice: e.target.value })} required />
+                                </div>
+                                <div>
+                                    <Label>Original Price</Label>
+                                    <Input type="number" min="0" step="0.01" value={formData.compareAtPrice} onChange={e => setFormData({ ...formData, compareAtPrice: e.target.value })} />
+                                </div>
                             </div>
                             <div>
                                 <Label>Stock</Label>
@@ -208,14 +217,51 @@ export default function AdminProductsPage() {
                             </div>
                             <div>
                                 <Label>Brand</Label>
-                                <Select value={formData.brand} onValueChange={val => setFormData({ ...formData, brand: val })}>
-                                    <SelectTrigger><SelectValue placeholder="Select Brand" /></SelectTrigger>
-                                    <SelectContent>
-                                        {brands?.map((b: any) => (
-                                            <SelectItem key={b.name} value={b.name}>{b.name}</SelectItem>
-                                        ))}
-                                    </SelectContent>
-                                </Select>
+                                <div className="flex gap-2">
+                                    <Select value={formData.brand} onValueChange={val => setFormData({ ...formData, brand: val })}>
+                                        <SelectTrigger className="w-full"><SelectValue placeholder="Select Brand" /></SelectTrigger>
+                                        <SelectContent>
+                                            {brands?.map((b: any) => (
+                                                <SelectItem key={b.name} value={b.name}>{b.name}</SelectItem>
+                                            ))}
+                                        </SelectContent>
+                                    </Select>
+                                    <Dialog>
+                                        <DialogTrigger asChild><Button type="button" size="icon" variant="outline"><Plus className="h-4 w-4" /></Button></DialogTrigger>
+                                        <DialogContent>
+                                            <DialogHeader><DialogTitle>Add New Brand</DialogTitle></DialogHeader>
+                                            <form onSubmit={async (e) => {
+                                                e.preventDefault();
+                                                const form = e.target as HTMLFormElement;
+                                                const name = (form.elements.namedItem('brandName') as HTMLInputElement).value;
+                                                if (!name) return;
+
+                                                try {
+                                                    const res = await fetch(getApiUrl("/api/brands"), {
+                                                        method: "POST",
+                                                        headers: { "Content-Type": "application/json" },
+                                                        body: JSON.stringify({ name, slug: name.toLowerCase().replace(/ /g, '-'), isActive: true })
+                                                    });
+                                                    if (res.ok) {
+                                                        queryClient.invalidateQueries({ queryKey: ['admin-brands-list'] });
+                                                        toast({ title: "Success", description: "Brand added" });
+                                                        // Close dialog logic (implicit by UI update) or refactor to controlled dialog
+                                                    } else {
+                                                        throw new Error("Failed");
+                                                    }
+                                                } catch (err) {
+                                                    toast({ title: "Error", description: "Could not add brand", variant: "destructive" });
+                                                }
+                                            }}>
+                                                <div className="py-4">
+                                                    <Label>Brand Name</Label>
+                                                    <Input name="brandName" required placeholder="e.g. Gucci" />
+                                                </div>
+                                                <Button type="submit">Create</Button>
+                                            </form>
+                                        </DialogContent>
+                                    </Dialog>
+                                </div>
                             </div>
                             <div className="col-span-2">
                                 <Label>Image</Label>
