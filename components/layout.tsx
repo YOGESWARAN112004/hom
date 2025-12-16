@@ -3,8 +3,8 @@ import { usePathname } from "next/navigation";
 import { ShoppingBag, Menu, ShieldCheck, UserCircle, ChevronDown, Check, LogOut, User, Package, Heart, MapPin, Users } from "lucide-react";
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { useShop } from "@/context/shop-context";
-import { useAuth } from "@/context/auth-context";
+import { useShop } from "@/hooks/use-shop";
+import { useAuth } from "@/hooks/use-auth";
 import { Button } from "@/components/ui/button";
 import {
   Sheet,
@@ -28,7 +28,7 @@ import {
   NavigationMenuTrigger,
 } from "@/components/ui/navigation-menu";
 import { AnnouncementBar } from "@/components/announcement-bar";
-import logoImg from "@assets/WhatsApp_Image_2025-12-11_at_19.54.19_da70f618_1765463204248.jpg";
+const logoImg = "/WhatsApp_Image_2025-12-11_at_19.54.19_da70f618_1765463204248.jpg";
 
 interface Brand {
   id: string;
