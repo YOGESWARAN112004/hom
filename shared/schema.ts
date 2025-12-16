@@ -177,6 +177,8 @@ export const products = pgTable("products", {
   sizeChart: jsonb("size_chart"), // JSON array of size measurements
   // Material and care instructions
   material: varchar("material", { length: 255 }),
+  // Simple size field (e.g. for products with one size option or simple inventory)
+  size: varchar("size", { length: 50 }),
   careInstructions: text("care_instructions"),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),

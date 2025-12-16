@@ -16,7 +16,7 @@ import { useState, useRef } from "react";
 import { useToast } from "@/hooks/use-toast";
 import { getApiUrl } from "@/lib/apiConfig";
 
-// Simplified Product Type
+// Simplified Product Type (matching Schema)
 type Product = {
     id: string;
     name: string;
@@ -30,7 +30,20 @@ type Product = {
     imageUrl?: string;
     isFeatured?: boolean;
     isActive?: boolean;
+    // New Fields
+    affiliateCommissionRate?: string;
+    size?: string;
 };
+
+const CATEGORIES = {
+    "Men": ["Clothing", "Shoes", "Accessories", "Watches"],
+    "Women": ["Clothing", "Shoes", "Handbags", "Jewelry"],
+    "Kids": ["Boys", "Girls", "Toys", "Baby"],
+    "Home": ["Decor", "Kitchen", "Bedding", "Furniture"],
+    "Beauty": ["Skincare", "Makeup", "Fragrance"],
+    "Electronics": ["Phones", "Laptops", "Audio", "Accessories"],
+    "Sports": ["Equipment", "Apparel", "Footwear"]
+} as const;
 
 export default function AdminProductsPage() {
     const { user, isLoading: authLoading } = useAuth();
@@ -52,6 +65,8 @@ export default function AdminProductsPage() {
         imageUrl: "",
         isFeatured: false,
         isActive: true,
+        affiliateCommissionRate: "10.00",
+        size: "",
     });
     const fileInputRef = useRef<HTMLInputElement>(null);
     const [uploading, setUploading] = useState(false);
@@ -60,7 +75,7 @@ export default function AdminProductsPage() {
     const { data: products, isLoading } = useQuery({
         queryKey: ['admin-products'],
         queryFn: async () => {
-            const res = await fetch(getApiUrl("/api/products?limit=100")); // Fetch up to 100 for now
+            const res = await fetch(getApiUrl("/api/products?limit=100"));
             if (!res.ok) throw new Error("Failed to fetch products");
             return res.json();
         },
@@ -129,16 +144,32 @@ export default function AdminProductsPage() {
         const file = e.target.files?.[0];
         if (!file) return;
         setUploading(true);
-        const formData = new FormData();
-        formData.append("image", file);
+        const formDataUpload = new FormData();
+        formDataUpload.append("image", file);
         try {
-            const res = await fetch(getApiUrl("/api/uploads/local"), { method: "POST", body: formData });
+            // Updated to use S3 Upload
+            const res = await fetch(getApiUrl("/api/uploads/s3"), { method: "POST", body: formDataUpload });
             const data = await res.json();
-            if (data.success) {
+            if (res.ok && data.success) {
                 setFormData(prev => ({ ...prev, imageUrl: data.publicUrl }));
-                toast({ title: "Success", description: "Image uploaded" });
+                toast({ title: "Success", description: "Image uploaded to Cloud" });
+            } else {
+                if (res.status === 503 || data.message === "S3 not configured") {
+                    // Fallback to local if S3 fails or not configured (dev mode)
+                    const localRes = await fetch(getApiUrl("/api/uploads/local"), { method: "POST", body: formDataUpload });
+                    const localData = await localRes.json();
+                    if (localData.success) {
+                        setFormData(prev => ({ ...prev, imageUrl: localData.publicUrl }));
+                        toast({ title: "Success", description: "Image uploaded locally (S3 fallback)" });
+                    } else {
+                        throw new Error("Upload failed");
+                    }
+                } else {
+                    throw new Error(data.message || "Upload failed");
+                }
             }
-        } catch {
+        } catch (err) {
+            console.error(err);
             toast({ title: "Error", description: "Upload failed", variant: "destructive" });
         } finally {
             setUploading(false);
@@ -152,6 +183,7 @@ export default function AdminProductsPage() {
             ...formData,
             basePrice: formData.basePrice?.toString(),
             compareAtPrice: formData.compareAtPrice?.toString(),
+            affiliateCommissionRate: formData.affiliateCommissionRate?.toString(),
             stock: Number(formData.stock),
         };
 
@@ -163,7 +195,11 @@ export default function AdminProductsPage() {
     };
 
     const resetForm = () => {
-        setFormData({ name: "", description: "", basePrice: "0", compareAtPrice: "0", stock: 0, category: "", subCategory: "", brand: "", imageUrl: "", isFeatured: false, isActive: true });
+        setFormData({
+            name: "", description: "", basePrice: "0", compareAtPrice: "0", stock: 0,
+            category: "", subCategory: "", brand: "", imageUrl: "", isFeatured: false, isActive: true,
+            affiliateCommissionRate: "10.00", size: ""
+        });
         setEditingProduct(null);
     };
 
@@ -175,6 +211,10 @@ export default function AdminProductsPage() {
         router.push("/");
         return null;
     }
+
+    const subCategories = formData.category && CATEGORIES[formData.category as keyof typeof CATEGORIES]
+        ? CATEGORIES[formData.category as keyof typeof CATEGORIES]
+        : [];
 
     return (
         <div className="container mx-auto py-8 px-4">
@@ -203,18 +243,48 @@ export default function AdminProductsPage() {
                                     <Input type="number" min="0" step="0.01" value={formData.compareAtPrice} onChange={e => setFormData({ ...formData, compareAtPrice: e.target.value })} />
                                 </div>
                             </div>
+
+                            {/* New Fields */}
+                            <div className="grid grid-cols-2 gap-2">
+                                <div>
+                                    <Label>Affiliate Commission (%)</Label>
+                                    <Input type="number" min="0" step="0.01" value={formData.affiliateCommissionRate} onChange={e => setFormData({ ...formData, affiliateCommissionRate: e.target.value })} />
+                                </div>
+                                <div>
+                                    <Label>Size (Optional)</Label>
+                                    <Input value={formData.size} onChange={e => setFormData({ ...formData, size: e.target.value })} placeholder="e.g. XL, 100ml" />
+                                </div>
+                            </div>
+
                             <div>
                                 <Label>Stock</Label>
                                 <Input type="number" min="0" value={formData.stock} onChange={e => setFormData({ ...formData, stock: parseInt(e.target.value) })} required />
                             </div>
+
+                            {/* Updated Category Selects */}
                             <div>
                                 <Label>Category</Label>
-                                <Input value={formData.category} onChange={e => setFormData({ ...formData, category: e.target.value })} placeholder="e.g. Men" />
+                                <Select value={formData.category} onValueChange={val => setFormData({ ...formData, category: val, subCategory: "" })}>
+                                    <SelectTrigger><SelectValue placeholder="Select Category" /></SelectTrigger>
+                                    <SelectContent>
+                                        {Object.keys(CATEGORIES).map(cat => (
+                                            <SelectItem key={cat} value={cat}>{cat}</SelectItem>
+                                        ))}
+                                    </SelectContent>
+                                </Select>
                             </div>
                             <div>
                                 <Label>Sub-Category</Label>
-                                <Input value={formData.subCategory} onChange={e => setFormData({ ...formData, subCategory: e.target.value })} placeholder="e.g. Jeans" />
+                                <Select value={formData.subCategory} onValueChange={val => setFormData({ ...formData, subCategory: val })} disabled={!formData.category}>
+                                    <SelectTrigger><SelectValue placeholder="Select Sub-Category" /></SelectTrigger>
+                                    <SelectContent>
+                                        {subCategories.map(sub => (
+                                            <SelectItem key={sub} value={sub}>{sub}</SelectItem>
+                                        ))}
+                                    </SelectContent>
+                                </Select>
                             </div>
+
                             <div>
                                 <Label>Brand</Label>
                                 <div className="flex gap-2">
@@ -245,7 +315,6 @@ export default function AdminProductsPage() {
                                                     if (res.ok) {
                                                         queryClient.invalidateQueries({ queryKey: ['admin-brands-list'] });
                                                         toast({ title: "Success", description: "Brand added" });
-                                                        // Close dialog logic (implicit by UI update) or refactor to controlled dialog
                                                     } else {
                                                         throw new Error("Failed");
                                                     }
@@ -264,11 +333,11 @@ export default function AdminProductsPage() {
                                 </div>
                             </div>
                             <div className="col-span-2">
-                                <Label>Image</Label>
+                                <Label>Image (Uploaded to Cloud)</Label>
                                 <div className="flex items-center gap-4 mt-2">
                                     {formData.imageUrl && <img src={formData.imageUrl} className="h-16 w-16 object-cover rounded" />}
                                     <Button type="button" variant="outline" size="sm" onClick={() => fileInputRef.current?.click()} disabled={uploading}>
-                                        {uploading ? <Loader2 className="animate-spin h-4 w-4" /> : <Upload className="h-4 w-4 mr-2" />} Upload
+                                        {uploading ? <Loader2 className="animate-spin h-4 w-4" /> : <Upload className="h-4 w-4 mr-2" />} Upload to S3
                                     </Button>
                                     <input type="file" ref={fileInputRef} className="hidden" accept="image/*" onChange={handleUpload} />
                                 </div>
@@ -298,6 +367,7 @@ export default function AdminProductsPage() {
                             <th className="p-4">Image</th>
                             <th className="p-4">Name</th>
                             <th className="p-4">Price</th>
+                            <th className="p-4">Category</th>
                             <th className="p-4">Stock</th>
                             <th className="p-4">Active</th>
                             <th className="p-4 text-right">Actions</th>
@@ -311,6 +381,7 @@ export default function AdminProductsPage() {
                                 </td>
                                 <td className="p-4 font-medium">{p.name}</td>
                                 <td className="p-4">${p.basePrice}</td>
+                                <td className="p-4">{p.category}/{p.subCategory}</td>
                                 <td className="p-4">{p.stock}</td>
                                 <td className="p-4">{p.isActive ? "Yes" : "No"}</td>
                                 <td className="p-4 text-right">
@@ -326,7 +397,7 @@ export default function AdminProductsPage() {
                             </tr>
                         ))}
                         {products?.length === 0 && (
-                            <tr><td colSpan={6} className="p-8 text-center text-muted-foreground">No products found</td></tr>
+                            <tr><td colSpan={7} className="p-8 text-center text-muted-foreground">No products found</td></tr>
                         )}
                     </tbody>
                 </table>

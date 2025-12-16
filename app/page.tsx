@@ -138,14 +138,16 @@ export default function Home() {
                             Discover pieces that transcend time. Crafted for the modern deity, inspired by ancient legends.
                         </p>
                         <div className="flex flex-col sm:flex-row gap-3 sm:gap-4">
-                            <Link href="/category/women">
+                            <Link href="/shop?category=Women">
                                 <Button className="bg-primary text-primary-foreground hover:bg-primary/90 rounded-none h-12 sm:h-14 px-6 sm:px-8 text-sm sm:text-lg font-heading tracking-widest w-full sm:w-auto">
                                     SHOP NOW
                                 </Button>
                             </Link>
-                            <Button variant="outline" className="border-white/30 text-white hover:bg-white/10 hover:border-white rounded-none h-12 sm:h-14 px-6 sm:px-8 text-sm sm:text-lg font-heading tracking-widest">
-                                VIEW LOOKBOOK
-                            </Button>
+                            <Link href="/lookbook">
+                                <Button variant="outline" className="border-white/30 text-white hover:bg-white/10 hover:border-white rounded-none h-12 sm:h-14 px-6 sm:px-8 text-sm sm:text-lg font-heading tracking-widest w-full sm:w-auto">
+                                    VIEW LOOKBOOK
+                                </Button>
+                            </Link>
                         </div>
                     </motion.div>
                 </div>
