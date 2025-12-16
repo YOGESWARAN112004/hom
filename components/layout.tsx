@@ -1,4 +1,5 @@
-import { Link, useLocation } from "wouter";
+import Link from "next/link";
+import { usePathname } from "next/navigation";
 import { ShoppingBag, Menu, ShieldCheck, UserCircle, ChevronDown, Check, LogOut, User, Package, Heart, MapPin, Users } from "lucide-react";
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
@@ -65,7 +66,7 @@ const STATIC_CATEGORIES = [
 ];
 
 export function Layout({ children }: { children: React.ReactNode }) {
-  const [location] = useLocation();
+  const location = usePathname();
   const { cart, cartTotal, removeFromCart } = useShop();
   const { user, isAuthenticated, logout } = useAuth();
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
@@ -80,11 +81,11 @@ export function Layout({ children }: { children: React.ReactNode }) {
     ...STATIC_CATEGORIES,
     {
       title: "Brands",
-      items: brands.length > 0 
+      items: brands.length > 0
         ? brands.map(brand => ({
-            title: brand.name,
-            href: `/brand/${brand.slug || brand.name.toLowerCase().replace(/\s+/g, '-')}`,
-          }))
+          title: brand.name,
+          href: `/brand/${brand.slug || brand.name.toLowerCase().replace(/\s+/g, '-')}`,
+        }))
         : [{ title: "Loading...", href: "/shop" }]
     }
   ];
@@ -126,15 +127,15 @@ export function Layout({ children }: { children: React.ReactNode }) {
                   </div>
                 ))}
                 <div className="h-px bg-white/10 my-2" />
-                
+
                 <Link href="/affiliate" onClick={() => setIsMobileMenuOpen(false)}>
                   <span className={`font-heading text-lg ${location === '/affiliate' ? 'text-primary' : 'hover:text-primary'} cursor-pointer flex items-center gap-2`}>
                     <Users className="h-4 w-4" /> Affiliate Program
                   </span>
                 </Link>
-                
+
                 <div className="h-px bg-white/10 my-2" />
-                
+
                 {isAuthenticated ? (
                   <>
                     <div className="text-sm text-muted-foreground">
@@ -163,9 +164,9 @@ export function Layout({ children }: { children: React.ReactNode }) {
           {/* Logo */}
           <Link href="/">
             <div className="flex items-center gap-3 group cursor-pointer">
-              <img 
-                src={logoImg} 
-                alt="Houses of Medusa" 
+              <img
+                src={logoImg}
+                alt="Houses of Medusa"
                 className="h-12 w-12 rounded-full border border-primary/50 group-hover:border-primary transition-colors object-cover"
               />
               <div className="flex flex-col">
@@ -213,13 +214,13 @@ export function Layout({ children }: { children: React.ReactNode }) {
                 </span>
               </Link>
             )}
-            
+
             <Link href="/affiliate">
               <span className={`hover:text-primary transition-colors cursor-pointer flex items-center gap-1 ${location === '/affiliate' ? 'text-primary' : 'text-foreground/80'} text-xs uppercase tracking-wide font-medium`}>
                 <Users className="h-3 w-3" /> Affiliate Program
               </span>
             </Link>
-            
+
             <Link href="/blog">
               <span className={`hover:text-primary transition-colors cursor-pointer flex items-center gap-1 ${location.startsWith('/blog') ? 'text-primary' : 'text-foreground/80'} text-xs uppercase tracking-wide font-medium`}>
                 Blog
@@ -294,7 +295,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
                     Your Selection
                   </SheetTitle>
                 </SheetHeader>
-                
+
                 <div className="flex flex-col h-full">
                   {cart.length === 0 ? (
                     <div className="flex-1 flex flex-col items-center justify-center text-muted-foreground gap-4">
@@ -323,7 +324,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
                                 <p className="font-mono text-primary">₹{parseFloat(item.price).toLocaleString()}</p>
                                 <div className="flex items-center gap-3">
                                   <span className="text-xs text-muted-foreground">Qty: {item.quantity}</span>
-                                  <button 
+                                  <button
                                     onClick={() => removeFromCart(item.id)}
                                     className="text-xs text-destructive hover:text-destructive/80 uppercase tracking-wider"
                                   >
@@ -411,9 +412,9 @@ export function Layout({ children }: { children: React.ReactNode }) {
               <h4 className="font-heading text-sm text-foreground mb-6">Newsletter</h4>
               <p className="text-sm text-muted-foreground mb-4">Subscribe to receive updates, access to exclusive deals, and more.</p>
               <div className="flex gap-2">
-                <input 
-                  type="email" 
-                  placeholder="EMAIL ADDRESS" 
+                <input
+                  type="email"
+                  placeholder="EMAIL ADDRESS"
                   className="bg-background/50 border border-white/10 px-4 py-2 text-sm w-full focus:outline-none focus:border-primary text-foreground placeholder:text-muted-foreground/50"
                 />
                 <Button variant="outline" className="border-primary text-primary hover:bg-primary hover:text-primary-foreground rounded-none">
