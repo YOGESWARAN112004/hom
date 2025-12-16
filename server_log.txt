@@ -1,0 +1,17 @@
+
+> luxury-commerce-hub@1.0.0 dev
+> next dev
+
+file:///E:/Luxury-Commerce-Hub/next.config.js:34
+module.exports = nextConfig;
+^
+
+ReferenceError: module is not defined in ES module scope
+This file is being treated as an ES module because it has a '.js' file extension and 'E:\Luxury-Commerce-Hub\package.json' contains "type": "module". To treat it as a CommonJS script, rename it to use the '.cjs' file extension.
+    at file:///E:/Luxury-Commerce-Hub/next.config.js:34:1
+    at ModuleJob.run (node:internal/modules/esm/module_job:358:25)
+    at async onImport.tracePromise.__proto__ (node:internal/modules/esm/loader:665:26)
+    at async loadConfig (E:\Luxury-Commerce-Hub\node_modules\next\dist\server\config.js:711:36)
+    at async Module.nextDev (E:\Luxury-Commerce-Hub\node_modules\next\dist\cli\next-dev.js:175:14)
+
+Node.js v24.2.0
