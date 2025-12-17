@@ -988,24 +988,40 @@ export class DatabaseStorage implements IStorage {
   // ============================================
 
   async createOrder(order: InsertOrder, items: InsertOrderItem[]): Promise<Order> {
-    const [newOrder] = await db.insert(orders).values(order).returning();
+    try {
+      const [newOrder] = await db.insert(orders).values(order).returning();
 
-    for (const item of items) {
-      await db.insert(orderItems).values({
-        ...item,
-        orderId: newOrder.id,
-      });
+      if (!newOrder) {
+        throw new Error("Failed to create order in database");
+      }
 
-      // Update stock
-      if (item.variantId) {
-        const variant = await this.getVariant(item.variantId);
-        if (variant) {
-          await this.updateVariantStock(variant.id, Math.max(0, variant.stock - item.quantity));
+      for (const item of items) {
+        // Validate required fields
+        if (!item.productId || !item.productName || !item.unitPrice || !item.totalPrice || !item.quantity) {
+          throw new Error(`Invalid order item: missing required fields. Item: ${JSON.stringify(item)}`);
+        }
+
+        await db.insert(orderItems).values({
+          ...item,
+          orderId: newOrder.id,
+        });
+
+        // Update stock
+        if (item.variantId) {
+          const variant = await this.getVariant(item.variantId);
+          if (variant) {
+            await this.updateVariantStock(variant.id, Math.max(0, variant.stock - item.quantity));
+          }
         }
       }
-    }
 
-    return newOrder;
+      return newOrder;
+    } catch (error: any) {
+      console.error("Error in createOrder:", error);
+      console.error("Order data:", JSON.stringify(order, null, 2));
+      console.error("Order items:", JSON.stringify(items, null, 2));
+      throw error;
+    }
   }
 
   async getOrder(id: string): Promise<Order | undefined> {

@@ -60,6 +60,16 @@ export async function POST(req: NextRequest) {
             return NextResponse.json({ success: false, message: "Shipping address is required" }, { status: 400 });
         }
 
+        // Validate shipping address fields
+        const requiredFields = ['fullName', 'address', 'city', 'state', 'zipCode', 'phone', 'email'];
+        const missingFields = requiredFields.filter(field => !body.shippingAddress[field]);
+        if (missingFields.length > 0) {
+            return NextResponse.json({ 
+                success: false, 
+                message: `Missing required shipping fields: ${missingFields.join(', ')}` 
+            }, { status: 400 });
+        }
+
         const cartItems = await storage.getCartItems(payload.userId);
         if (cartItems.length === 0) {
             return NextResponse.json({ success: false, message: "Cart is empty" }, { status: 400 });
@@ -70,13 +80,48 @@ export async function POST(req: NextRequest) {
         const orderItemsData = [];
 
         for (const item of cartItems) {
+            // Validate product exists
+            if (!item.product) {
+                console.error(`Product not found for cart item: ${item.productId}`);
+                return NextResponse.json({ 
+                    success: false, 
+                    message: `Product not found for item in cart` 
+                }, { status: 400 });
+            }
+
             // Get base price from product
-            let itemPrice = parseFloat(item.product.basePrice);
+            const basePrice = item.product.basePrice;
+            if (!basePrice) {
+                console.error(`Product ${item.productId} has no base price`);
+                return NextResponse.json({ 
+                    success: false, 
+                    message: `Product ${item.product?.name || item.productId} has no price` 
+                }, { status: 400 });
+            }
+
+            let itemPrice = parseFloat(basePrice);
+            if (isNaN(itemPrice)) {
+                console.error(`Invalid price for product ${item.productId}: ${basePrice}`);
+                return NextResponse.json({ 
+                    success: false, 
+                    message: `Invalid price for product ${item.product?.name || item.productId}` 
+                }, { status: 400 });
+            }
             
             // Adjust price if variant has price modifier
             if (item.variant && item.variant.priceModifier) {
                 const modifier = parseFloat(item.variant.priceModifier);
-                itemPrice = itemPrice + modifier; // Price modifier can be positive or negative
+                if (!isNaN(modifier)) {
+                    itemPrice = itemPrice + modifier; // Price modifier can be positive or negative
+                }
+            }
+
+            if (item.quantity <= 0) {
+                console.error(`Invalid quantity for product ${item.productId}: ${item.quantity}`);
+                return NextResponse.json({ 
+                    success: false, 
+                    message: `Invalid quantity for product ${item.product?.name || item.productId}` 
+                }, { status: 400 });
             }
 
             subtotal += itemPrice * item.quantity;
@@ -87,7 +132,7 @@ export async function POST(req: NextRequest) {
                 quantity: item.quantity,
                 unitPrice: itemPrice.toString(),
                 totalPrice: (itemPrice * item.quantity).toString(),
-                productName: item.product.name,
+                productName: item.product.name || 'Unknown Product',
                 productSku: item.product.sku || null,
                 variantSize: item.variant?.size || null,
                 variantColor: item.variant?.color || null,
@@ -134,34 +179,68 @@ export async function POST(req: NextRequest) {
         };
 
         // Create order in database
-        const order = await storage.createOrder(orderData as any, orderItemsData as any);
+        try {
+            const order = await storage.createOrder(orderData as any, orderItemsData as any);
 
-        // Increment coupon usage if coupon was applied
-        if (body.couponCode && discountAmount > 0) {
-            const coupon = await storage.getCoupon(body.couponCode);
-            if (coupon) {
-                await storage.incrementCouponUsage(coupon.id);
+            // Increment coupon usage if coupon was applied
+            if (body.couponCode && discountAmount > 0) {
+                try {
+                    const coupon = await storage.getCoupon(body.couponCode);
+                    if (coupon) {
+                        await storage.incrementCouponUsage(coupon.id);
+                    }
+                } catch (couponError) {
+                    console.error("Error incrementing coupon usage:", couponError);
+                    // Don't fail the order if coupon increment fails
+                }
             }
-        }
 
-        // Note: Razorpay order creation is now handled in /api/payments/create-order
-        // This endpoint just creates the order in pending state
-        
-        return NextResponse.json(order);
+            // Note: Razorpay order creation is now handled in /api/payments/create-order
+            // This endpoint just creates the order in pending state
+            
+            return NextResponse.json(order);
+        } catch (dbError: any) {
+            console.error("Database error creating order:", dbError);
+            console.error("Order data:", JSON.stringify(orderData, null, 2));
+            console.error("Order items:", JSON.stringify(orderItemsData, null, 2));
+            
+            // Check for specific database errors
+            if (dbError.message?.includes('violates') || dbError.message?.includes('constraint')) {
+                return NextResponse.json(
+                    { success: false, message: "Database constraint error. Please check order data." },
+                    { status: 400 }
+                );
+            }
+            
+            throw dbError; // Re-throw to be caught by outer catch
+        }
     } catch (error: any) {
         console.error("Create order error:", error);
+        console.error("Error stack:", error?.stack);
+        console.error("Error details:", {
+            message: error?.message,
+            name: error?.name,
+            code: error?.code,
+        });
         
         // Return more specific error messages
+        let errorMessage = "An internal server error occurred";
+        let statusCode = 500;
+        
         if (error.message) {
-            return NextResponse.json(
-                { success: false, message: error.message },
-                { status: 400 }
-            );
+            errorMessage = error.message;
+            // If it's a validation or client error, use 400
+            if (error.message.includes('required') || 
+                error.message.includes('invalid') || 
+                error.message.includes('missing') ||
+                error.message.includes('empty')) {
+                statusCode = 400;
+            }
         }
         
         return NextResponse.json(
-            { success: false, message: "An internal server error occurred" },
-            { status: 500 }
+            { success: false, message: errorMessage },
+            { status: statusCode }
         );
     }
 }
