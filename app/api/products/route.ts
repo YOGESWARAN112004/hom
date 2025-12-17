@@ -45,12 +45,14 @@ export async function GET(req: NextRequest) {
 
         // Debug: Log first product's images to verify they're being returned
         if (products.length > 0) {
+            // getProducts returns Product with images/variants added, but TypeScript doesn't know
+            const firstProduct = products[0] as typeof products[0] & { images?: any[]; variants?: any[] };
             console.log('Sample product images:', {
-                productId: products[0].id,
-                productName: products[0].name,
-                imageUrl: products[0].imageUrl,
-                images: products[0].images,
-                imagesCount: products[0].images?.length || 0
+                productId: firstProduct.id,
+                productName: firstProduct.name,
+                imageUrl: firstProduct.imageUrl,
+                images: firstProduct.images,
+                imagesCount: firstProduct.images?.length || 0
             });
         }
 
