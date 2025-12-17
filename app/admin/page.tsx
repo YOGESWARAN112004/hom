@@ -71,7 +71,7 @@ export default function AdminDashboard() {
         }
     });
 
-    if (authLoading || (analyticsLoading && user?.role === 'admin')) {
+    if (authLoading) {
         return (
             <div className="flex justify-center items-center min-h-screen">
                 <Loader2 className="h-8 w-8 animate-spin" />
@@ -81,6 +81,14 @@ export default function AdminDashboard() {
 
     if (!user || user.role !== 'admin') {
         return null;
+    }
+
+    if (analyticsLoading) {
+        return (
+            <div className="flex justify-center items-center min-h-screen">
+                <Loader2 className="h-8 w-8 animate-spin" />
+            </div>
+        );
     }
 
     return (
@@ -94,7 +102,7 @@ export default function AdminDashboard() {
                         <DollarSign className="h-4 w-4 text-muted-foreground" />
                     </CardHeader>
                     <CardContent>
-                        <div className="text-2xl font-bold">${analytics?.totalRevenue?.toLocaleString() || 0}</div>
+                        <div className="text-2xl font-bold">₹{((analytics?.totalRevenue || 0) as number).toLocaleString()}</div>
                         <p className="text-xs text-muted-foreground">+20.1% from last month</p>
                     </CardContent>
                 </Card>
@@ -189,7 +197,7 @@ export default function AdminDashboard() {
                                                     {order.status}
                                                 </Badge>
                                             </TableCell>
-                                            <TableCell className="text-right">₹{parseFloat(order.totalAmount).toLocaleString()}</TableCell>
+                                            <TableCell className="text-right">₹{(parseFloat(order.totalAmount || '0') || 0).toLocaleString()}</TableCell>
                                         </TableRow>
                                     ))}
                                 </TableBody>

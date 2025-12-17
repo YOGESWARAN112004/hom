@@ -37,7 +37,14 @@ function getPublicUrl(key: string): string {
   const region = process.env.AWS_REGION || 'ap-south-1';
   // Ensure key doesn't have leading slash
   const cleanKey = key.startsWith('/') ? key.slice(1) : key;
-  return `https://${BUCKET_NAME}.s3.${region}.amazonaws.com/${cleanKey}`;
+  const url = `https://${BUCKET_NAME}.s3.${region}.amazonaws.com/${cleanKey}`;
+  
+  // Debug logging in development
+  if (process.env.NODE_ENV === 'development') {
+    console.log('Generated S3 URL:', { key, cleanKey, url, bucket: BUCKET_NAME, region });
+  }
+  
+  return url;
 }
 
 // ============================================

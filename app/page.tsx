@@ -218,6 +218,16 @@ export default function Home() {
                             const primaryImage = product.images?.find(img => img.isPrimary)?.url ||
                                 product.images?.[0]?.url ||
                                 product.imageUrl;
+                            
+                            // Debug: Log if no image found
+                            if (!primaryImage && process.env.NODE_ENV === 'development') {
+                                console.warn('No image found for product:', product.id, product.name, {
+                                    hasImages: !!product.images,
+                                    imagesCount: product.images?.length || 0,
+                                    hasImageUrl: !!product.imageUrl,
+                                    imageUrl: product.imageUrl
+                                });
+                            }
 
                             return (
                                 <motion.div

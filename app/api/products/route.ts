@@ -43,6 +43,17 @@ export async function GET(req: NextRequest) {
             products = products.filter((p: any) => p.stock <= 5);
         }
 
+        // Debug: Log first product's images to verify they're being returned
+        if (products.length > 0) {
+            console.log('Sample product images:', {
+                productId: products[0].id,
+                productName: products[0].name,
+                imageUrl: products[0].imageUrl,
+                images: products[0].images,
+                imagesCount: products[0].images?.length || 0
+            });
+        }
+
         return NextResponse.json(products);
     } catch (error) {
         console.error("Error fetching products:", error);

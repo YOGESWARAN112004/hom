@@ -28,10 +28,31 @@ export async function GET(req: NextRequest) {
 
         return NextResponse.json(analytics);
 
-    } catch (error) {
+    } catch (error: any) {
         console.error("Admin analytics error:", error);
+        
+        // Return more specific error information
+        const errorMessage = error?.message || "Failed to fetch analytics";
+        console.error("Analytics error details:", {
+            message: errorMessage,
+            stack: error?.stack,
+        });
+        
         return NextResponse.json(
-            { success: false, message: "Failed to fetch analytics" },
+            { 
+                success: false, 
+                message: errorMessage,
+                // Return empty analytics structure to prevent frontend crashes
+                totalRevenue: 0,
+                totalOrders: 0,
+                totalProducts: 0,
+                totalUsers: 0,
+                pendingOrders: 0,
+                lowStockProducts: 0,
+                recentOrders: [],
+                salesByDay: [],
+                topProducts: [],
+            },
             { status: 500 }
         );
     }

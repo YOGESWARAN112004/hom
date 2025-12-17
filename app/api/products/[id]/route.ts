@@ -13,6 +13,14 @@ export async function GET(req: NextRequest, { params }: { params: { id: string }
         if (!product) {
             return NextResponse.json({ message: "Product not found" }, { status: 404 });
         }
+
+        // Debug: Log product images
+        console.log('Product images for', id, ':', {
+            imageUrl: product.imageUrl,
+            images: product.images,
+            imagesCount: product.images?.length || 0
+        });
+
         return NextResponse.json(product);
     } catch (error) {
         console.error("Error fetching product:", error);

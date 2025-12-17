@@ -906,24 +906,24 @@ export class DatabaseStorage implements IStorage {
     topProducts: Array<{ id: string; name: string; sales: number; revenue: number }>;
   }> {
     // Basic stats
-    const [revenueResult] = await db.select({ value: sql<string>`sum(${orders.totalAmount})` }).from(orders);
-    const totalRevenue = parseFloat(revenueResult?.value || '0');
+    const [revenueResult] = await db.select({ value: sql<string>`COALESCE(sum(${orders.totalAmount}), 0)` }).from(orders);
+    const totalRevenue = parseFloat(revenueResult?.value || '0') || 0;
 
     const [ordersResult] = await db.select({ count: sql<number>`count(*)` }).from(orders);
-    const totalOrders = Number(ordersResult?.count || 0);
+    const totalOrders = Number(ordersResult?.count || 0) || 0;
 
     const [productsResult] = await db.select({ count: sql<number>`count(*)` }).from(products);
-    const totalProducts = Number(productsResult?.count || 0);
+    const totalProducts = Number(productsResult?.count || 0) || 0;
 
     const [usersResult] = await db.select({ count: sql<number>`count(*)` }).from(users);
-    const totalUsers = Number(usersResult?.count || 0);
+    const totalUsers = Number(usersResult?.count || 0) || 0;
 
     const [pendingResult] = await db.select({ count: sql<number>`count(*)` }).from(orders).where(eq(orders.status, 'pending'));
-    const pendingOrders = Number(pendingResult?.count || 0);
+    const pendingOrders = Number(pendingResult?.count || 0) || 0;
 
     // Low stock products (less than 5 units)
     const [lowStockResult] = await db.select({ count: sql<number>`count(*)` }).from(productVariants).where(lte(productVariants.stock, 5));
-    const lowStockProducts = Number(lowStockResult?.count || 0);
+    const lowStockProducts = Number(lowStockResult?.count || 0) || 0;
 
     // Recent orders
     const recentOrders = await db.select().from(orders).orderBy(desc(orders.createdAt)).limit(5);
@@ -936,7 +936,7 @@ export class DatabaseStorage implements IStorage {
       SELECT 
         DATE(created_at) as date, 
         COUNT(*) as orders, 
-        SUM(total_amount) as sales 
+        COALESCE(SUM(total_amount), 0) as sales 
       FROM orders 
       WHERE created_at >= ${thirtyDaysAgo.toISOString()} 
       GROUP BY DATE(created_at) 
@@ -945,8 +945,8 @@ export class DatabaseStorage implements IStorage {
 
     const salesByDay = salesByDayResult.rows.map((row: any) => ({
       date: new Date(row.date).toISOString().split('T')[0],
-      sales: parseFloat(row.sales),
-      orders: parseInt(row.orders),
+      sales: parseFloat(row.sales || '0') || 0,
+      orders: parseInt(row.orders || '0', 10) || 0,
     }));
 
     // Top products
@@ -955,7 +955,7 @@ export class DatabaseStorage implements IStorage {
         p.id, 
         p.name, 
         COUNT(oi.id) as sales, 
-        SUM(oi.price * oi.quantity) as revenue 
+        COALESCE(SUM(oi.total_price), 0) as revenue 
       FROM order_items oi
       JOIN products p ON oi.product_id = p.id
       GROUP BY p.id, p.name
@@ -966,8 +966,8 @@ export class DatabaseStorage implements IStorage {
     const topProducts = topProductsResult.rows.map((row: any) => ({
       id: row.id,
       name: row.name,
-      sales: parseInt(row.sales),
-      revenue: parseFloat(row.revenue),
+      sales: parseInt(row.sales || '0', 10) || 0,
+      revenue: parseFloat(row.revenue || '0') || 0,
     }));
 
     return {
