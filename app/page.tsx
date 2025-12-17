@@ -204,7 +204,7 @@ export default function Home() {
                             <span className="text-primary uppercase tracking-[0.2em] text-xs font-bold mb-2 block">New Arrivals</span>
                             <h2 className="font-heading text-2xl sm:text-3xl md:text-4xl text-foreground">LATEST TREASURES</h2>
                         </div>
-                        <Link href="/products">
+                        <Link href="/shop">
                             <Button variant="link" className="text-primary hover:text-primary/80 uppercase tracking-widest hidden md:flex">
                                 View All Products
                                 <ArrowRight className="ml-2 h-4 w-4" />
@@ -320,7 +320,7 @@ export default function Home() {
 
                     {/* Mobile View All Button */}
                     <div className="mt-12 text-center md:hidden">
-                        <Link href="/products">
+                        <Link href="/shop">
                             <Button variant="outline" className="border-primary text-primary hover:bg-primary hover:text-primary-foreground uppercase tracking-widest">
                                 View All Products
                                 <ArrowRight className="ml-2 h-4 w-4" />

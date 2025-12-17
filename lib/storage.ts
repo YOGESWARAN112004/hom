@@ -51,7 +51,7 @@ import {
   customPrices,
 } from "@shared/schema";
 import { db } from "./db";
-import { eq, desc, sql, and, gte, lte, or, ilike, getTableColumns } from "drizzle-orm";
+import { eq, ilike, desc, or, and, gte, lte, sql, inArray, getTableColumns } from "drizzle-orm";
 
 export interface IStorage {
   // User operations
@@ -521,16 +521,39 @@ export class DatabaseStorage implements IStorage {
     }
 
     const result = await query;
-    // Cast back to Product[] because the mapped basePrice might be number instead of string depending on driver, 
-    // but schema says string (decimal). mapWith(Number) makes it number. Schema expects string? 
-    // Wait, Drizzle usage: usually decimal is string.
-    // Let's remove mapWith(Number) and let it be string to match Product type.
-    return result as unknown as Product[];
+
+    // Fetch relations
+    const productIds = result.map((p: any) => p.id);
+    if (productIds.length === 0) return [];
+
+    const images = await db.select().from(productImages).where(inArray(productImages.productId, productIds));
+    const variants = await db.select().from(productVariants).where(inArray(productVariants.productId, productIds));
+
+    // Map relations to products
+    const productsWithRelations = result.map((p: any) => {
+      return {
+        ...p,
+        images: images.filter(img => img.productId === p.id).sort((a, b) => a.sortOrder - b.sortOrder),
+        variants: variants.filter(v => v.productId === p.id),
+      };
+    });
+
+    return productsWithRelations as unknown as Product[];
   }
 
   async getProduct(id: string): Promise<Product | undefined> {
     const [product] = await db.select().from(products).where(eq(products.id, id));
-    return product;
+
+    if (!product) return undefined;
+
+    const images = await db.select().from(productImages).where(eq(productImages.productId, id));
+    const variants = await db.select().from(productVariants).where(eq(productVariants.productId, id));
+
+    return {
+      ...product,
+      images: images.sort((a, b) => a.sortOrder - b.sortOrder),
+      variants,
+    } as Product;
   }
 
   async getProductBySlug(slug: string): Promise<Product | undefined> {
