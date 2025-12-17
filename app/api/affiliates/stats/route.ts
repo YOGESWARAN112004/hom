@@ -1,5 +1,6 @@
 
 import { NextRequest, NextResponse } from "next/server";
+export const dynamic = 'force-dynamic';
 import { storage } from "@/lib/storage";
 import { cookies } from "next/headers";
 import { verifyToken } from "@/lib/auth";
