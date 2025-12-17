@@ -48,11 +48,13 @@ export default function CartPage() {
                     {cart.map((item) => (
                         <Card key={item.id}>
                             <CardContent className="p-4 flex gap-4">
-                                {item.imageUrl && (
-                                    <div className="h-24 w-24 flex-shrink-0 bg-gray-100 rounded-md overflow-hidden">
+                                <div className="h-24 w-24 flex-shrink-0 bg-gray-100 rounded-md overflow-hidden flex items-center justify-center">
+                                    {item.imageUrl ? (
                                         <img src={item.imageUrl} alt={item.name} className="h-full w-full object-cover" />
-                                    </div>
-                                )}
+                                    ) : (
+                                        <ShoppingBag className="h-8 w-8 text-gray-300" />
+                                    )}
+                                </div>
                                 <div className="flex-1 flex flex-col justify-between">
                                     <div className="flex justify-between">
                                         <div>

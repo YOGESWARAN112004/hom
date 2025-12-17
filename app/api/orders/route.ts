@@ -55,16 +55,10 @@ export async function POST(req: NextRequest) {
 
         const body = await req.json();
 
-        // Validate order data
-        // We expect shippingAddress, billingAddress, items (if not from cart), etc.
-        // For now, let's assume the body contains necessary data to create an order.
-        // The storage.createOrder method expects an InsertOrder object.
-
-        // However, usually orders are created from Cart.
-        // Let's assume the frontend sends the necessary details.
-
-        // We need to calculate totals, etc.
-        // Ideally, we should fetch cart items, calculate total, create order.
+        // Validate shipping address
+        if (!body.shippingAddress) {
+            return NextResponse.json({ success: false, message: "Shipping address is required" }, { status: 400 });
+        }
 
         const cartItems = await storage.getCartItems(payload.userId);
         if (cartItems.length === 0) {
@@ -76,28 +70,53 @@ export async function POST(req: NextRequest) {
         const orderItemsData = [];
 
         for (const item of cartItems) {
-            const price = parseFloat(item.product.basePrice); // Handle variants price modifier if needed
-            // Note: storage.getCartItems returns joined data.
-            // We need to check if variant exists and has price modifier.
-
-            let itemPrice = price;
-            // Logic to adjust price based on variant would go here
+            // Get base price from product
+            let itemPrice = parseFloat(item.product.basePrice);
+            
+            // Adjust price if variant has price modifier
+            if (item.variant && item.variant.priceModifier) {
+                const modifier = parseFloat(item.variant.priceModifier);
+                itemPrice = itemPrice + modifier; // Price modifier can be positive or negative
+            }
 
             subtotal += itemPrice * item.quantity;
 
             orderItemsData.push({
                 productId: item.productId,
-                variantId: item.variantId,
+                variantId: item.variantId || null,
                 quantity: item.quantity,
                 unitPrice: itemPrice.toString(),
                 totalPrice: (itemPrice * item.quantity).toString(),
                 productName: item.product.name,
-                // ... other fields
+                productSku: item.product.sku || null,
+                variantSize: item.variant?.size || null,
+                variantColor: item.variant?.color || null,
+                productImageUrl: item.product.imageUrl || null,
             });
         }
 
-        const shippingCost = subtotal > 10000 ? 0 : 500; // Example logic
-        const totalAmount = subtotal + shippingCost;
+        // Calculate shipping cost
+        const shippingCost = subtotal > 10000 ? 0 : 500;
+        
+        // Validate and apply coupon discount if provided
+        let discountAmount = 0;
+        if (body.couponCode) {
+            const couponValidation = await storage.validateCoupon(body.couponCode, subtotal + shippingCost);
+            if (couponValidation.valid) {
+                discountAmount = couponValidation.discount;
+            } else {
+                return NextResponse.json({ 
+                    success: false, 
+                    message: couponValidation.message || "Invalid coupon code" 
+                }, { status: 400 });
+            }
+        }
+
+        // Calculate tax (assuming 0% for now, can be configured later)
+        const taxAmount = 0;
+        
+        // Calculate final total
+        const totalAmount = Math.max(0, subtotal + shippingCost + taxAmount - discountAmount);
 
         // Create Order in DB
         const orderData = {
@@ -105,39 +124,41 @@ export async function POST(req: NextRequest) {
             orderNumber: `ORD-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
             subtotal: subtotal.toString(),
             shippingCost: shippingCost.toString(),
+            taxAmount: taxAmount.toString(),
+            discountAmount: discountAmount.toString(),
             totalAmount: totalAmount.toString(),
             status: 'pending',
             paymentMethod: body.paymentMethod || 'razorpay',
             shippingAddress: body.shippingAddress,
             billingAddress: body.billingAddress || body.shippingAddress,
-            // ... other fields
         };
 
-        // We need to use storage.createOrder. 
-        // Note: storage.createOrder signature might need adjustment or we construct the object carefully.
-        // Let's assume storage.createOrder takes the object.
+        // Create order in database
+        const order = await storage.createOrder(orderData as any, orderItemsData as any);
 
-        const order = await storage.createOrder(orderData as any, orderItemsData as any); // Type casting for now
-
-        // Create Razorpay Order
-        if (order.paymentMethod === 'razorpay') {
-            const razorpayOrder = await createRazorpayOrder({
-                amount: Math.round(totalAmount * 100), // in paise
-                orderId: order.id,
-                currency: 'INR',
-            });
-
-            // Update order with razorpayOrderId
-            await storage.updateOrderPayment(order.id, {
-                razorpayOrderId: razorpayOrder.id,
-            });
-
-            return NextResponse.json({ ...order, razorpayOrderId: razorpayOrder.id });
+        // Increment coupon usage if coupon was applied
+        if (body.couponCode && discountAmount > 0) {
+            const coupon = await storage.getCoupon(body.couponCode);
+            if (coupon) {
+                await storage.incrementCouponUsage(coupon.id);
+            }
         }
 
+        // Note: Razorpay order creation is now handled in /api/payments/create-order
+        // This endpoint just creates the order in pending state
+        
         return NextResponse.json(order);
-    } catch (error) {
+    } catch (error: any) {
         console.error("Create order error:", error);
+        
+        // Return more specific error messages
+        if (error.message) {
+            return NextResponse.json(
+                { success: false, message: error.message },
+                { status: 400 }
+            );
+        }
+        
         return NextResponse.json(
             { success: false, message: "An internal server error occurred" },
             { status: 500 }

@@ -77,23 +77,52 @@ export async function POST(req: NextRequest) {
 
         // Handle multiple images if provided
         if (images && Array.isArray(images) && images.length > 0) {
+            let primaryImageUrl = productData.imageUrl;
+            
             for (let i = 0; i < images.length; i++) {
                 const imageUrl = images[i];
+                // Ensure URL is absolute (starts with http:// or https://)
+                const absoluteUrl = imageUrl.startsWith('http://') || imageUrl.startsWith('https://') 
+                    ? imageUrl 
+                    : imageUrl;
+                
+                const isPrimary = imageUrl === productData.imageUrl || (i === 0 && !productData.imageUrl);
+                
                 await storage.addProductImage({
                     productId: product.id,
-                    url: imageUrl,
+                    url: absoluteUrl,
                     sortOrder: i,
-                    isPrimary: imageUrl === productData.imageUrl // Mark as primary if it matches the main imageUrl
+                    isPrimary: isPrimary
                 });
+                
+                // Update product imageUrl if this is the primary image
+                if (isPrimary && !primaryImageUrl) {
+                    primaryImageUrl = absoluteUrl;
+                }
+            }
+            
+            // Update product imageUrl to match primary image if needed
+            if (primaryImageUrl && primaryImageUrl !== product.imageUrl) {
+                await storage.updateProduct(product.id, { imageUrl: primaryImageUrl });
             }
         } else if (productData.imageUrl) {
+            // Ensure URL is absolute
+            const absoluteUrl = productData.imageUrl.startsWith('http://') || productData.imageUrl.startsWith('https://')
+                ? productData.imageUrl
+                : productData.imageUrl;
+            
             // If no images array but imageUrl exists, add it as single image
             await storage.addProductImage({
                 productId: product.id,
-                url: productData.imageUrl,
+                url: absoluteUrl,
                 sortOrder: 0,
                 isPrimary: true
             });
+            
+            // Ensure product imageUrl is set correctly
+            if (absoluteUrl !== product.imageUrl) {
+                await storage.updateProduct(product.id, { imageUrl: absoluteUrl });
+            }
         }
 
         return NextResponse.json(product, { status: 201 });

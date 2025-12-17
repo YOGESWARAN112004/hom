@@ -3,6 +3,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { storage } from "@/lib/storage";
 import { cookies } from "next/headers";
 import { verifyToken } from "@/lib/auth";
+import { deleteFile } from "@/lib/s3";
 
 export async function GET(req: NextRequest, { params }: { params: { id: string } }) {
     try {
@@ -53,35 +54,70 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
             // Get existing images
             const existingImages = await storage.getProductImages(id);
             const existingUrls = existingImages.map(img => img.url);
+            let primaryImageUrl = updateData.imageUrl;
 
             // 1. Add new images
             for (let i = 0; i < images.length; i++) {
                 const url = images[i];
-                if (!existingUrls.includes(url)) {
+                // Ensure URL is absolute
+                const absoluteUrl = url.startsWith('http://') || url.startsWith('https://')
+                    ? url
+                    : url;
+                
+                const isPrimary = absoluteUrl === updateData.imageUrl || (i === 0 && !updateData.imageUrl && !primaryImageUrl);
+                
+                if (!existingUrls.includes(absoluteUrl)) {
                     await storage.addProductImage({
                         productId: id,
-                        url: url,
+                        url: absoluteUrl,
                         sortOrder: i,
-                        isPrimary: url === updateData.imageUrl
+                        isPrimary: isPrimary
                     });
                 } else {
                     // Update sort order or primary status for existing
-                    const existing = existingImages.find(img => img.url === url);
+                    const existing = existingImages.find(img => img.url === absoluteUrl);
                     if (existing) {
-                        // We can update the order/primary status here if we had an update method
-                        // For now, let's just ensuring primary status is correct if it matches
-                        if (url === updateData.imageUrl && !existing.isPrimary) {
+                        // Update primary status if needed
+                        if (isPrimary && !existing.isPrimary) {
                             await storage.setPrimaryImage(id, existing.id);
+                        }
+                        // Update sort order if changed
+                        if (existing.sortOrder !== i) {
+                            await storage.updateProductImage(existing.id, { sortOrder: i });
                         }
                     }
                 }
+                
+                // Track primary image URL
+                if (isPrimary && !primaryImageUrl) {
+                    primaryImageUrl = absoluteUrl;
+                }
             }
 
-            // 2. Remove deleted images
+            // 2. Remove deleted images and clean up S3 files
             for (const existing of existingImages) {
                 if (!images.includes(existing.url)) {
+                    // Delete from S3 before removing from database
+                    try {
+                        await deleteFile(existing.url);
+                    } catch (error) {
+                        console.error(`Failed to delete S3 file ${existing.url}:`, error);
+                        // Continue with database deletion even if S3 deletion fails
+                    }
                     await storage.deleteProductImage(existing.id);
                 }
+            }
+            
+            // 3. Update product imageUrl to match primary image if needed
+            if (primaryImageUrl && primaryImageUrl !== product.imageUrl) {
+                await storage.updateProduct(id, { imageUrl: primaryImageUrl });
+            } else if (images.length > 0 && !primaryImageUrl) {
+                // If no primary set but images exist, set first one as primary
+                const firstImage = images[0];
+                const absoluteFirstUrl = firstImage.startsWith('http://') || firstImage.startsWith('https://')
+                    ? firstImage
+                    : firstImage;
+                await storage.updateProduct(id, { imageUrl: absoluteFirstUrl });
             }
         }
 
@@ -111,7 +147,22 @@ export async function DELETE(req: NextRequest, { params }: { params: { id: strin
         }
 
         const { id } = await params;
+        
+        // Get product images before deletion to clean up S3 files
+        const productImages = await storage.getProductImages(id);
+        
+        // Delete product (this will cascade delete images due to foreign key)
         await storage.deleteProduct(id);
+        
+        // Clean up S3 files for all product images
+        for (const image of productImages) {
+            try {
+                await deleteFile(image.url);
+            } catch (error) {
+                console.error(`Failed to delete S3 file ${image.url}:`, error);
+                // Continue with other deletions even if one fails
+            }
+        }
 
         return NextResponse.json({ success: true });
 

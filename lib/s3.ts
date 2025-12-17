@@ -25,9 +25,19 @@ function generateUniqueFilename(originalFilename: string): string {
 // Get public URL for an object
 function getPublicUrl(key: string): string {
   if (CLOUDFRONT_URL) {
-    return `${CLOUDFRONT_URL}/${key}`;
+    // Ensure CloudFront URL doesn't have trailing slash
+    const baseUrl = CLOUDFRONT_URL.endsWith('/') ? CLOUDFRONT_URL.slice(0, -1) : CLOUDFRONT_URL;
+    // Ensure key doesn't have leading slash
+    const cleanKey = key.startsWith('/') ? key.slice(1) : key;
+    return `${baseUrl}/${cleanKey}`;
   }
-  return `https://${BUCKET_NAME}.s3.${process.env.AWS_REGION || 'ap-south-1'}.amazonaws.com/${key}`;
+  
+  // For public S3 buckets, use virtual-hosted-style URL
+  // Format: https://{bucket}.s3.{region}.amazonaws.com/{key}
+  const region = process.env.AWS_REGION || 'ap-south-1';
+  // Ensure key doesn't have leading slash
+  const cleanKey = key.startsWith('/') ? key.slice(1) : key;
+  return `https://${BUCKET_NAME}.s3.${region}.amazonaws.com/${cleanKey}`;
 }
 
 // ============================================
@@ -74,31 +84,45 @@ export async function uploadFile(
   contentType: string,
   folder: string = 'products'
 ): Promise<{ url: string; key: string }> {
-  const key = `${folder}/${generateUniqueFilename(filename)}`;
+  try {
+    const key = `${folder}/${generateUniqueFilename(filename)}`;
 
-  // Note: ACL removed - bucket uses "Bucket owner enforced" object ownership
-  // Public access should be configured via bucket policy instead
-  // Images are uploaded at FULL QUALITY - no compression
-  const command = new PutObjectCommand({
-    Bucket: BUCKET_NAME,
-    Key: key,
-    Body: buffer,
-    ContentType: contentType,
-    // Preserve image quality - no compression
-    CacheControl: 'public, max-age=31536000, immutable', // Cache for 1 year
-    // Metadata to indicate high quality
-    Metadata: {
-      'quality': 'high',
-      'original-filename': filename,
-    },
-  });
+    // Note: ACL removed - bucket uses "Bucket owner enforced" object ownership
+    // Public access should be configured via bucket policy instead
+    // Images are uploaded at FULL QUALITY - no compression
+    const command = new PutObjectCommand({
+      Bucket: BUCKET_NAME,
+      Key: key,
+      Body: buffer,
+      ContentType: contentType,
+      // Preserve image quality - no compression
+      CacheControl: 'public, max-age=31536000, immutable', // Cache for 1 year
+      // Metadata to indicate high quality
+      Metadata: {
+        'quality': 'high',
+        'original-filename': filename,
+      },
+    });
 
-  await s3Client.send(command);
+    await s3Client.send(command);
+    
+    const publicUrl = getPublicUrl(key);
+    console.log(`Successfully uploaded file to S3: ${key} -> ${publicUrl}`);
 
-  return {
-    url: getPublicUrl(key),
-    key,
-  };
+    return {
+      url: publicUrl,
+      key,
+    };
+  } catch (error: any) {
+    console.error('S3 upload error details:', {
+      error: error.message,
+      code: error.Code,
+      statusCode: error.$metadata?.httpStatusCode,
+      bucket: BUCKET_NAME,
+      filename,
+    });
+    throw error;
+  }
 }
 
 // ============================================
@@ -110,8 +134,41 @@ export async function deleteFile(keyOrUrl: string): Promise<boolean> {
     // Extract key from URL if full URL is provided
     let key = keyOrUrl;
     if (keyOrUrl.startsWith('http')) {
-      const url = new URL(keyOrUrl);
-      key = url.pathname.substring(1); // Remove leading slash
+      try {
+        const url = new URL(keyOrUrl);
+        // Handle CloudFront URLs
+        if (CLOUDFRONT_URL && keyOrUrl.includes(CLOUDFRONT_URL)) {
+          key = url.pathname.substring(1); // Remove leading slash
+        } 
+        // Handle S3 URLs (virtual-hosted-style: bucket.s3.region.amazonaws.com)
+        else if (keyOrUrl.includes('.s3.') && keyOrUrl.includes('.amazonaws.com')) {
+          key = url.pathname.substring(1); // Remove leading slash
+        }
+        // Handle path-style S3 URLs (s3.region.amazonaws.com/bucket/key)
+        else if (keyOrUrl.includes('s3.') && keyOrUrl.includes('.amazonaws.com')) {
+          const pathParts = url.pathname.split('/').filter(Boolean);
+          // Skip bucket name (first part) and get the rest as key
+          if (pathParts.length > 1) {
+            key = pathParts.slice(1).join('/');
+          } else {
+            key = url.pathname.substring(1);
+          }
+        } else {
+          // Fallback: just use pathname
+          key = url.pathname.substring(1);
+        }
+      } catch (urlError) {
+        console.error('Error parsing URL for deletion:', urlError);
+        return false;
+      }
+    }
+    
+    // Ensure key doesn't have leading/trailing slashes
+    key = key.replace(/^\/+|\/+$/g, '');
+
+    if (!key) {
+      console.error('Invalid key extracted from URL:', keyOrUrl);
+      return false;
     }
 
     const command = new DeleteObjectCommand({
@@ -120,6 +177,7 @@ export async function deleteFile(keyOrUrl: string): Promise<boolean> {
     });
 
     await s3Client.send(command);
+    console.log(`Successfully deleted S3 file: ${key}`);
     return true;
   } catch (error) {
     console.error('Error deleting file from S3:', error);

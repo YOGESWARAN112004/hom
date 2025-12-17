@@ -85,7 +85,13 @@ export function getOptimizedImageUrl(
   baseUrl: string | null | undefined,
   width?: number
 ): string {
-  if (!baseUrl) return '';
+  if (!baseUrl || baseUrl.trim() === '') return '';
+
+  // Validate URL format
+  if (!baseUrl.startsWith('http://') && !baseUrl.startsWith('https://') && !baseUrl.startsWith('/')) {
+    // Invalid URL format, return empty
+    return '';
+  }
 
   // If you're using CloudFront with Lambda@Edge, ImageKit, Cloudinary, etc.
   // you can add transformation parameters here

@@ -82,9 +82,9 @@ export default function CheckoutPage() {
 
             const data = await res.json();
             if (data.valid) {
-                setDiscount(data.discountAmount);
+                setDiscount(data.discount);
                 setAppliedCoupon(couponCode);
-                toast({ title: "Coupon Applied", description: `You saved ${formatCurrency(data.discountAmount)}!` });
+                toast({ title: "Coupon Applied", description: `You saved ${formatCurrency(data.discount)}!` });
             } else {
                 toast({ title: "Invalid Coupon", description: data.message, variant: "destructive" });
                 setDiscount(0);

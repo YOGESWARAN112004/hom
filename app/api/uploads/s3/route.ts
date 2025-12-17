@@ -43,6 +43,15 @@ export async function POST(req: NextRequest) {
             return NextResponse.json({ message: "S3 not configured" }, { status: 503 });
         }
 
+        // Validate file type and size before processing
+        const validation = s3.validateImageFile(file.type, file.size);
+        if (!validation.valid) {
+            return NextResponse.json(
+                { success: false, message: validation.message || "Invalid file" },
+                { status: 400 }
+            );
+        }
+
         const buffer = Buffer.from(await file.arrayBuffer());
 
         const result = await s3.uploadFile(
@@ -58,10 +67,23 @@ export async function POST(req: NextRequest) {
             key: result.key,
         });
 
-    } catch (error) {
+    } catch (error: any) {
         console.error("S3 upload error:", error);
+        
+        // Provide more specific error messages
+        let errorMessage = "Failed to upload to S3";
+        if (error?.message) {
+            errorMessage = error.message;
+        } else if (error?.name === 'CredentialsProviderError') {
+            errorMessage = "S3 credentials not configured properly";
+        } else if (error?.name === 'NoSuchBucket') {
+            errorMessage = "S3 bucket does not exist";
+        } else if (error?.$metadata?.httpStatusCode === 403) {
+            errorMessage = "Access denied to S3 bucket. Check permissions.";
+        }
+        
         return NextResponse.json(
-            { success: false, message: "Failed to upload to S3" },
+            { success: false, message: errorMessage },
             { status: 500 }
         );
     }
