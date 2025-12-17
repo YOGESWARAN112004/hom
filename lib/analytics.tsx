@@ -1,4 +1,10 @@
-// Google Analytics 4 E-commerce Tracking
+"use client";
+
+import Script from 'next/script';
+import { usePathname, useSearchParams } from 'next/navigation';
+import { useEffect, Suspense } from 'react';
+
+const GA_MEASUREMENT_ID = process.env.NEXT_PUBLIC_GA_MEASUREMENT_ID || '';
 
 declare global {
   interface Window {
@@ -7,28 +13,55 @@ declare global {
   }
 }
 
-const GA_MEASUREMENT_ID = process.env.VITE_GA_MEASUREMENT_ID || '';
+function AnalyticsComponent() {
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
 
-// Initialize GA4
+  useEffect(() => {
+    if (pathname && window.gtag) {
+      window.gtag('config', GA_MEASUREMENT_ID, {
+        page_path: pathname,
+      });
+    }
+  }, [pathname, searchParams]);
+
+  return null;
+}
+
+export function GoogleAnalytics() {
+  if (!GA_MEASUREMENT_ID) return null;
+
+  return (
+    <>
+    <Script
+        strategy= "afterInteractive"
+  src = {`https://www.googletagmanager.com/gtag/js?id=${GA_MEASUREMENT_ID}`
+}
+      />
+  < Script
+id = "google-analytics"
+strategy = "afterInteractive"
+dangerouslySetInnerHTML = {{
+  __html: `
+            window.dataLayer = window.dataLayer || [];
+            function gtag(){dataLayer.push(arguments);}
+            gtag('js', new Date());
+            gtag('config', '${GA_MEASUREMENT_ID}', {
+              page_path: window.location.pathname,
+            });
+          `,
+        }}
+      />
+  < Suspense fallback = { null} >
+    <AnalyticsComponent />
+    </Suspense>
+    </>
+  );
+}
+
+// Initialize GA4 (Legacy support if needed, but component is preferred)
 export function initGA() {
-  if (!GA_MEASUREMENT_ID || typeof window === 'undefined') return;
-
-  // Add gtag script
-  const script = document.createElement('script');
-  script.async = true;
-  script.src = `https://www.googletagmanager.com/gtag/js?id=${GA_MEASUREMENT_ID}`;
-  document.head.appendChild(script);
-
-  // Initialize dataLayer
-  window.dataLayer = window.dataLayer || [];
-  window.gtag = function gtag() {
-    window.dataLayer.push(arguments);
-  };
-
-  window.gtag('js', new Date());
-  window.gtag('config', GA_MEASUREMENT_ID, {
-    send_page_view: false, // We'll handle page views manually
-  });
+  // Logic handled by GoogleAnalytics component now
 }
 
 // Helper to check if GA is ready

@@ -1473,6 +1473,12 @@ export class DatabaseStorage implements IStorage {
       })
       .where(eq(abandonedCartEmails.id, emailId));
   }
+
+  // ============================================
+  // ANALYTICS OPERATIONS
+  // ============================================
+
+
 }
 
 export const storage = new DatabaseStorage();
