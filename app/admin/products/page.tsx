@@ -1,4 +1,3 @@
-
 "use client";
 
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
@@ -10,29 +9,34 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
-import { Loader2, Plus, Pencil, Trash2, Upload } from "lucide-react";
+import { Loader2, Plus, Pencil, Trash2, Upload, X } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useState, useRef } from "react";
 import { useToast } from "@/hooks/use-toast";
 import { getApiUrl } from "@/lib/apiConfig";
 
-// Simplified Product Type (matching Schema)
+// Simplified Product Type (matching Schema for display)
 type Product = {
     id: string;
     name: string;
     description?: string;
     basePrice: string;
-    compareAtPrice?: string;
+    compareAtPrice?: string | null;
     stock: number;
-    category?: string;
-    subCategory?: string;
-    brand?: string;
-    imageUrl?: string;
+    category: string;
+    subCategory: string;
+    brand: string;
+    imageUrl?: string | null;
+    images?: { id: string; url: string; isPrimary: boolean; }[];
     isFeatured?: boolean;
     isActive?: boolean;
-    // New Fields
-    affiliateCommissionRate?: string;
-    size?: string;
+    affiliateCommissionRate?: string | null;
+    size?: string | null;
+};
+
+// Form data type - images is string[] here for easier handling of URLs
+type ProductFormData = Omit<Partial<Product>, 'images'> & {
+    images: string[];
 };
 
 const CATEGORIES = {
@@ -53,7 +57,7 @@ export default function AdminProductsPage() {
     const [isDialogOpen, setIsDialogOpen] = useState(false);
     const [editingProduct, setEditingProduct] = useState<Product | null>(null);
 
-    const [formData, setFormData] = useState<Partial<Product>>({
+    const [formData, setFormData] = useState<ProductFormData>({
         name: "",
         description: "",
         basePrice: "0",
@@ -63,6 +67,7 @@ export default function AdminProductsPage() {
         subCategory: "",
         brand: "",
         imageUrl: "",
+        images: [],
         isFeatured: false,
         isActive: true,
         affiliateCommissionRate: "10.00",
@@ -141,39 +146,65 @@ export default function AdminProductsPage() {
     });
 
     const handleUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-        const file = e.target.files?.[0];
-        if (!file) return;
+        const files = e.target.files;
+        if (!files || files.length === 0) return;
         setUploading(true);
-        const formDataUpload = new FormData();
-        formDataUpload.append("image", file);
+
+        const newImages: string[] = [];
+
         try {
-            // Updated to use S3 Upload
-            const res = await fetch(getApiUrl("/api/uploads/s3"), { method: "POST", body: formDataUpload });
-            const data = await res.json();
-            if (res.ok && data.success) {
-                setFormData(prev => ({ ...prev, imageUrl: data.publicUrl }));
-                toast({ title: "Success", description: "Image uploaded to Cloud" });
-            } else {
-                if (res.status === 503 || data.message === "S3 not configured") {
-                    // Fallback to local if S3 fails or not configured (dev mode)
+            for (let i = 0; i < files.length; i++) {
+                const file = files[i];
+                const formDataUpload = new FormData();
+                formDataUpload.append("image", file);
+
+                // Updated to use S3 Upload
+                const res = await fetch(getApiUrl("/api/uploads/s3"), { method: "POST", body: formDataUpload });
+                const data = await res.json();
+
+                if (res.ok && data.success) {
+                    newImages.push(data.publicUrl);
+                } else if (res.status === 503 || data.message === "S3 not configured") {
+                    // Fallback
                     const localRes = await fetch(getApiUrl("/api/uploads/local"), { method: "POST", body: formDataUpload });
                     const localData = await localRes.json();
                     if (localData.success) {
-                        setFormData(prev => ({ ...prev, imageUrl: localData.publicUrl }));
-                        toast({ title: "Success", description: "Image uploaded locally (S3 fallback)" });
-                    } else {
-                        throw new Error("Upload failed");
+                        newImages.push(localData.publicUrl);
                     }
-                } else {
-                    throw new Error(data.message || "Upload failed");
                 }
+            }
+
+            if (newImages.length > 0) {
+                setFormData(prev => ({
+                    ...prev,
+                    imageUrl: prev.imageUrl || newImages[0], // Set first as primary if none
+                    images: [...(prev.images || []), ...newImages]
+                }));
+                toast({ title: "Success", description: `${newImages.length} images uploaded` });
             }
         } catch (err) {
             console.error(err);
             toast({ title: "Error", description: "Upload failed", variant: "destructive" });
         } finally {
             setUploading(false);
+            if (fileInputRef.current) fileInputRef.current.value = "";
         }
+    };
+
+    const removeImage = (index: number) => {
+        setFormData(prev => {
+            const newImages = [...prev.images];
+            newImages.splice(index, 1);
+            return {
+                ...prev,
+                images: newImages,
+                imageUrl: (prev.imageUrl === prev.images[index]) ? (newImages[0] || "") : prev.imageUrl
+            };
+        });
+    };
+
+    const setPrimaryImage = (url: string) => {
+        setFormData(prev => ({ ...prev, imageUrl: url }));
     };
 
     const handleSubmit = (e: React.FormEvent) => {
@@ -185,6 +216,10 @@ export default function AdminProductsPage() {
             compareAtPrice: formData.compareAtPrice?.toString(),
             affiliateCommissionRate: formData.affiliateCommissionRate?.toString(),
             stock: Number(formData.stock),
+            // Ensure images array is filtered and formatted if needed by backend, 
+            // but for now passing simple string array of URLs plus the primary imageUrl
+            images: formData.images,
+            imageUrl: formData.imageUrl || formData.images[0] || ""
         };
 
         if (editingProduct) {
@@ -197,7 +232,7 @@ export default function AdminProductsPage() {
     const resetForm = () => {
         setFormData({
             name: "", description: "", basePrice: "0", compareAtPrice: "0", stock: 0,
-            category: "", subCategory: "", brand: "", imageUrl: "", isFeatured: false, isActive: true,
+            category: "", subCategory: "", brand: "", imageUrl: "", images: [], isFeatured: false, isActive: true,
             affiliateCommissionRate: "10.00", size: ""
         });
         setEditingProduct(null);
@@ -241,11 +276,11 @@ export default function AdminProductsPage() {
                             <div className="grid grid-cols-2 gap-2">
                                 <div>
                                     <Label>Base Price</Label>
-                                    <Input type="number" min="0" step="0.01" value={formData.basePrice} onChange={e => setFormData({ ...formData, basePrice: e.target.value })} required />
+                                    <Input type="number" min="0" step="0.01" value={formData.basePrice || ""} onChange={e => setFormData({ ...formData, basePrice: e.target.value })} required />
                                 </div>
                                 <div>
                                     <Label>Original Price</Label>
-                                    <Input type="number" min="0" step="0.01" value={formData.compareAtPrice} onChange={e => setFormData({ ...formData, compareAtPrice: e.target.value })} />
+                                    <Input type="number" min="0" step="0.01" value={formData.compareAtPrice || ""} onChange={e => setFormData({ ...formData, compareAtPrice: e.target.value })} />
                                 </div>
                             </div>
 
@@ -253,11 +288,11 @@ export default function AdminProductsPage() {
                             <div className="grid grid-cols-2 gap-2">
                                 <div>
                                     <Label>Affiliate Commission (%)</Label>
-                                    <Input type="number" min="0" step="0.01" value={formData.affiliateCommissionRate} onChange={e => setFormData({ ...formData, affiliateCommissionRate: e.target.value })} />
+                                    <Input type="number" min="0" step="0.01" value={formData.affiliateCommissionRate || ""} onChange={e => setFormData({ ...formData, affiliateCommissionRate: e.target.value })} />
                                 </div>
                                 <div>
                                     <Label>Size (Optional)</Label>
-                                    <Input value={formData.size} onChange={e => setFormData({ ...formData, size: e.target.value })} placeholder="e.g. XL, 100ml" />
+                                    <Input value={formData.size || ""} onChange={e => setFormData({ ...formData, size: e.target.value })} placeholder="e.g. XL, 100ml" />
                                 </div>
                             </div>
 
@@ -338,14 +373,39 @@ export default function AdminProductsPage() {
                                 </div>
                             </div>
                             <div className="col-span-2">
-                                <Label>Image (Uploaded to Cloud)</Label>
-                                <div className="flex items-center gap-4 mt-2">
-                                    {formData.imageUrl && <img src={formData.imageUrl} className="h-16 w-16 object-cover rounded" />}
-                                    <Button type="button" variant="outline" size="sm" onClick={() => fileInputRef.current?.click()} disabled={uploading}>
-                                        {uploading ? <Loader2 className="animate-spin h-4 w-4" /> : <Upload className="h-4 w-4 mr-2" />} Upload to S3
+                                <Label>Images (Upload multiple)</Label>
+                                <div className="flex flex-wrap gap-4 mt-2 mb-2">
+                                    {formData.images?.map((img, idx) => (
+                                        <div key={idx} className="relative group border rounded-md overflow-hidden h-20 w-20">
+                                            <img src={img} className="h-full w-full object-cover" />
+                                            <button
+                                                type="button"
+                                                className="absolute top-1 right-1 bg-red-500 text-white rounded-full p-1 opacity-0 group-hover:opacity-100 transition-opacity"
+                                                onClick={() => removeImage(idx)}
+                                            >
+                                                <X className="h-3 w-3" />
+                                            </button>
+                                            {formData.imageUrl === img && (
+                                                <div className="absolute bottom-0 left-0 right-0 bg-primary text-primary-foreground text-[10px] text-center py-0.5">
+                                                    Primary
+                                                </div>
+                                            )}
+                                            {formData.imageUrl !== img && (
+                                                <button
+                                                    type="button"
+                                                    className="absolute inset-0 bg-black/40 text-white opacity-0 group-hover:opacity-100 flex items-center justify-center text-xs"
+                                                    onClick={() => setPrimaryImage(img)}
+                                                >
+                                                    Set Main
+                                                </button>
+                                            )}
+                                        </div>
+                                    ))}
+                                    <Button type="button" variant="outline" className="h-20 w-20 border-dashed" onClick={() => fileInputRef.current?.click()} disabled={uploading}>
+                                        {uploading ? <Loader2 className="animate-spin h-6 w-6" /> : <Upload className="h-6 w-6" />}
                                     </Button>
-                                    <input type="file" ref={fileInputRef} className="hidden" accept="image/*" onChange={handleUpload} />
                                 </div>
+                                <input type="file" ref={fileInputRef} className="hidden" accept="image/*" multiple onChange={handleUpload} />
                             </div>
                             <div className="flex items-center space-x-2">
                                 <Switch id="isFeatured" checked={formData.isFeatured} onCheckedChange={c => setFormData({ ...formData, isFeatured: c })} />
@@ -392,7 +452,17 @@ export default function AdminProductsPage() {
                                 <td className="p-4 text-right">
                                     <Button variant="ghost" size="sm" onClick={() => {
                                         setEditingProduct(p);
-                                        setFormData({ ...p });
+                                        const pImages = p.images?.map(i => i.url) || (p.imageUrl ? [p.imageUrl] : []);
+                                        setFormData({
+                                            ...p,
+                                            images: pImages,
+                                            // Ensure nulls are handled for form inputs which prefer empty strings or undefined
+                                            description: p.description || "",
+                                            compareAtPrice: p.compareAtPrice || "",
+                                            imageUrl: p.imageUrl || "",
+                                            affiliateCommissionRate: p.affiliateCommissionRate || "",
+                                            size: p.size || ""
+                                        });
                                         setIsDialogOpen(true);
                                     }}><Pencil className="h-4 w-4" /></Button>
                                     <Button variant="ghost" size="sm" className="text-destructive" onClick={() => {

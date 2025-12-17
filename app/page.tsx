@@ -5,6 +5,7 @@ import { useShop, type Product } from "@/hooks/use-shop";
 import { Button } from "@/components/ui/button";
 import Link from "next/link";
 import { ArrowRight, Star, ShoppingBag } from "lucide-react";
+import { useRouter } from "next/navigation";
 import { trackViewItemList, trackSelectItem, trackAddToCart } from "@/lib/analytics";
 import { useEffect, SyntheticEvent } from "react";
 import { generateImageSrcSet, generateImageSizes } from "@/lib/imageUtils";
@@ -21,9 +22,12 @@ interface Brand {
 
 export default function Home() {
     const { products, addToCart, isLoadingProducts } = useShop();
+    const router = useRouter();
 
     // Featured product (first one)
     const heroProduct = products[0];
+    // ... (rest of the file until the button)
+
 
     // Fetch brands from API
     const { data: brands = [] } = useQuery<Brand[]>({
@@ -274,7 +278,7 @@ export default function Home() {
                                             e.preventDefault();
                                             if (product.hasVariants) {
                                                 // Navigate to product page to select variant
-                                                window.location.href = `/product/${product.id}`;
+                                                router.push(`/product/${product.id}`);
                                             } else {
                                                 handleAddToCart(product);
                                             }

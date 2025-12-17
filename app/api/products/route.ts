@@ -68,9 +68,34 @@ export async function POST(req: NextRequest) {
         }
 
         const body = await req.json();
-        const productData = insertProductSchema.parse(body);
+        // Extract images array from body, as it's not part of the product schema directly
+        const { images, ...productDataRaw } = body;
+
+        const productData = insertProductSchema.parse(productDataRaw);
 
         const product = await storage.createProduct(productData);
+
+        // Handle multiple images if provided
+        if (images && Array.isArray(images) && images.length > 0) {
+            for (let i = 0; i < images.length; i++) {
+                const imageUrl = images[i];
+                await storage.addProductImage({
+                    productId: product.id,
+                    url: imageUrl,
+                    sortOrder: i,
+                    isPrimary: imageUrl === productData.imageUrl // Mark as primary if it matches the main imageUrl
+                });
+            }
+        } else if (productData.imageUrl) {
+            // If no images array but imageUrl exists, add it as single image
+            await storage.addProductImage({
+                productId: product.id,
+                url: productData.imageUrl,
+                sortOrder: 0,
+                isPrimary: true
+            });
+        }
+
         return NextResponse.json(product, { status: 201 });
 
     } catch (error) {

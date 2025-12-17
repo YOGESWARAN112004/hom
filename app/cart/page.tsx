@@ -1,17 +1,15 @@
-
 "use client";
 
-import { useCart } from "@/hooks/use-cart";
+import { useShop } from "@/hooks/use-shop";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardFooter } from "@/components/ui/card";
 import { Loader2, Trash2, Minus, Plus, ShoppingBag } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { formatCurrency } from "@/lib/utils"; // Assuming utils exists, otherwise I'll use simple formatting
 import { useEffect, useState } from "react";
 
 export default function CartPage() {
-    const cart = useCart();
+    const { cart, removeFromCart, updateQuantity, cartTotal, isLoadingProducts } = useShop();
     const router = useRouter();
     const [isMounted, setIsMounted] = useState(false);
 
@@ -23,7 +21,7 @@ export default function CartPage() {
         return <div className="p-8 flex justify-center"><Loader2 className="animate-spin" /></div>;
     }
 
-    if (cart.items.length === 0) {
+    if (cart.length === 0) {
         return (
             <div className="container mx-auto py-16 px-4 text-center">
                 <div className="flex justify-center mb-4">
@@ -38,9 +36,8 @@ export default function CartPage() {
         );
     }
 
-    const subtotal = cart.getSubtotal();
-    const shippingEstimate = subtotal > 10000 ? 0 : 500;
-    const total = subtotal + shippingEstimate;
+    const shippingEstimate = cartTotal > 10000 ? 0 : 500;
+    const total = cartTotal + shippingEstimate;
 
     return (
         <div className="container mx-auto py-8 px-4">
@@ -48,8 +45,8 @@ export default function CartPage() {
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
                 {/* Cart Items */}
                 <div className="lg:col-span-2 space-y-4">
-                    {cart.items.map((item) => (
-                        <Card key={`${item.productId}-${item.variantId}`}>
+                    {cart.map((item) => (
+                        <Card key={item.id}>
                             <CardContent className="p-4 flex gap-4">
                                 {item.imageUrl && (
                                     <div className="h-24 w-24 flex-shrink-0 bg-gray-100 rounded-md overflow-hidden">
@@ -60,13 +57,18 @@ export default function CartPage() {
                                     <div className="flex justify-between">
                                         <div>
                                             <h3 className="font-medium text-lg">{item.name}</h3>
-                                            <p className="text-sm text-gray-500">{formatPrice(item.price)}</p>
+                                            <p className="text-sm text-gray-500">{formatPrice(parseFloat(item.price))}</p>
+                                            {(item.size || item.color) && (
+                                                <p className="text-xs text-muted-foreground mt-1">
+                                                    {item.size && `Size: ${item.size}`}{item.size && item.color && ' | '}{item.color && `Color: ${item.color}`}
+                                                </p>
+                                            )}
                                         </div>
                                         <Button
                                             variant="ghost"
                                             size="icon"
                                             className="text-destructive h-8 w-8"
-                                            onClick={() => cart.removeItem(item.productId, item.variantId)}
+                                            onClick={() => removeFromCart(item.id)}
                                         >
                                             <Trash2 className="h-4 w-4" />
                                         </Button>
@@ -77,7 +79,7 @@ export default function CartPage() {
                                                 variant="ghost"
                                                 size="icon"
                                                 className="h-8 w-8 rounded-none"
-                                                onClick={() => cart.updateQuantity(item.productId, Math.max(1, item.quantity - 1), item.variantId)}
+                                                onClick={() => updateQuantity(item.id, Math.max(1, item.quantity - 1))}
                                                 disabled={item.quantity <= 1}
                                             >
                                                 <Minus className="h-3 w-3" />
@@ -87,13 +89,13 @@ export default function CartPage() {
                                                 variant="ghost"
                                                 size="icon"
                                                 className="h-8 w-8 rounded-none"
-                                                onClick={() => cart.updateQuantity(item.productId, item.quantity + 1, item.variantId)}
+                                                onClick={() => updateQuantity(item.id, item.quantity + 1)}
                                             >
                                                 <Plus className="h-3 w-3" />
                                             </Button>
                                         </div>
                                         <div className="font-medium">
-                                            {formatPrice(item.price * item.quantity)}
+                                            {formatPrice(parseFloat(item.price) * item.quantity)}
                                         </div>
                                     </div>
                                 </div>
@@ -111,7 +113,7 @@ export default function CartPage() {
                         <CardContent className="space-y-4">
                             <div className="flex justify-between text-sm">
                                 <span className="text-muted-foreground">Subtotal</span>
-                                <span>{formatPrice(subtotal)}</span>
+                                <span>{formatPrice(cartTotal)}</span>
                             </div>
                             <div className="flex justify-between text-sm">
                                 <span className="text-muted-foreground">Shipping Estimate</span>

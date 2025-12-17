@@ -152,6 +152,7 @@ export const products = pgTable("products", {
   shortDescription: varchar("short_description", { length: 500 }),
   basePrice: decimal("base_price", { precision: 10, scale: 2 }).notNull(),
   compareAtPrice: decimal("compare_at_price", { precision: 10, scale: 2 }), // Original price for showing discounts
+  imageUrl: varchar("image_url", { length: 500 }), // Main product image
   category: varchar("category", { length: 100 }).notNull(), // Men, Women, Kids, etc.
   subCategory: varchar("sub_category", { length: 100 }).notNull(), // Clothing, Bags, etc.
   brand: varchar("brand", { length: 100 }).notNull(),

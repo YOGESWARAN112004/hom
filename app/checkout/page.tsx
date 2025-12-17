@@ -1,7 +1,7 @@
 
 "use client";
 
-import { useCart } from "@/hooks/use-cart";
+import { useShop } from "@/hooks/use-shop";
 import { useAuth } from "@/hooks/use-auth";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardFooter } from "@/components/ui/card";
@@ -23,7 +23,7 @@ declare global {
 }
 
 export default function CheckoutPage() {
-    const cart = useCart();
+    const { cart, cartTotal, clearCart } = useShop();
     const { user, isLoading: authLoading } = useAuth();
     const router = useRouter();
     const { toast } = useToast();
@@ -61,12 +61,12 @@ export default function CheckoutPage() {
         return <div className="p-8 flex justify-center"><Loader2 className="animate-spin" /></div>;
     }
 
-    if (cart.items.length === 0) {
+    if (cart.length === 0) {
         router.push("/cart");
         return null;
     }
 
-    const subtotal = cart.getSubtotal();
+    const subtotal = cartTotal;
     const shippingCost = subtotal > 10000 ? 0 : 500;
     const finalTotal = Math.max(0, subtotal + shippingCost - discount);
 
@@ -107,7 +107,7 @@ export default function CheckoutPage() {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({
-                    items: cart.items, // Backend should ideally re-verify prices
+                    items: cart, // Pass cart items explicitly if needed by API, though backend usually refetches
                     shippingAddress: shippingDetails,
                     couponCode: appliedCoupon,
                     paymentMethod: "razorpay"
@@ -150,7 +150,7 @@ export default function CheckoutPage() {
 
                         const verifyData = await verifyRes.json();
                         if (verifyData.success) {
-                            cart.clearCart();
+                            clearCart();
                             toast({ title: "Order Placed!", description: "Thank you for your purchase." });
                             router.push("/account"); // Or order confirmation page
                         } else {
@@ -224,10 +224,10 @@ export default function CheckoutPage() {
                     <Card>
                         <CardHeader><CardTitle>Order Summary</CardTitle></CardHeader>
                         <CardContent className="space-y-4">
-                            {cart.items.map(item => (
-                                <div key={item.productId} className="flex justify-between text-sm">
+                            {cart.map(item => (
+                                <div key={item.id} className="flex justify-between text-sm">
                                     <span>{item.name} x {item.quantity}</span>
-                                    <span>{formatCurrency(item.price * item.quantity)}</span>
+                                    <span>{formatCurrency(parseFloat(item.price) * item.quantity)}</span>
                                 </div>
                             ))}
                             <div className="border-t my-2"></div>
