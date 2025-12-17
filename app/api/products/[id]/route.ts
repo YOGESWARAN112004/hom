@@ -15,10 +15,12 @@ export async function GET(req: NextRequest, { params }: { params: { id: string }
         }
 
         // Debug: Log product images
+        // getProduct returns Product with images/variants added, but TypeScript doesn't know
+        const productWithRelations = product as typeof product & { images?: any[]; variants?: any[] };
         console.log('Product images for', id, ':', {
             imageUrl: product.imageUrl,
-            images: product.images,
-            imagesCount: product.images?.length || 0
+            images: productWithRelations.images,
+            imagesCount: productWithRelations.images?.length || 0
         });
 
         return NextResponse.json(product);
