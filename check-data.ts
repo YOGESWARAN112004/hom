@@ -14,14 +14,21 @@ async function checkData() {
         console.log("Orders:", orderCount?.count);
 
         // Check columns
-        const columns = await db.execute(sql`
-      SELECT column_name 
-      FROM information_schema.columns 
-      WHERE table_name = 'orders';
+        console.log("Adding image_url column...");
+        await db.execute(sql`
+      ALTER TABLE products ADD COLUMN IF NOT EXISTS image_url VARCHAR(500);
     `);
 
-        console.log("Orders Columns:", columns.rows.map((r: any) => r.column_name));
+        console.log("Column added.");
 
+        // Verify
+        const columns = await db.execute(sql`
+      SELECT column_name
+      FROM information_schema.columns 
+      WHERE table_name = 'products' AND column_name = 'image_url';
+    `);
+
+        console.log("Products Specific Columns Verify:", columns.rows.map((r: any) => r.column_name));
         process.exit(0);
     } catch (error) {
         console.error("Error:", error);
